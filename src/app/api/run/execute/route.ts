@@ -218,9 +218,15 @@ async function executeNode(
 
       case "extract": {
         const videoUrl = resolveInput(node.id, "video_url", allEdges, resolvedOutputs)
-          ?? (node.data as any).output ?? "";
+          ?? (node.data as any).uploadedUrl 
+          ?? (node.data as any).url 
+          ?? "";
+
         const timestamp = resolveInput(node.id, "timestamp", allEdges, resolvedOutputs)
-          ?? (node.data as any).timestamp ?? "50%";
+          ?? (node.data as any).timestamp 
+          ?? "50%";
+
+        console.log(`[FLOW_DEBUG] Extracting from: ${videoUrl || "EMPTY_URL"}`);
 
         const handle = await extractFrameTask.trigger({
           videoUrl,
@@ -232,6 +238,8 @@ async function executeNode(
 
         const taskResult = await runs.poll(handle.id, { pollIntervalMs: 1000 });
         if (taskResult.status !== "COMPLETED") throw new Error("Extract task failed");
+        
+        // Make sure we extract the nested 'output' string from Trigger.dev
         output = (taskResult.output as any).output;
         break;
       }
