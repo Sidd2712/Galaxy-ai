@@ -58,7 +58,7 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     icon: "Film",
     color: "#ff6eb4",
     inputs: [
-      { id: "video_url", label: "video_url", dataType: "video" },
+      { id: "videoUrl", label: "video_url", dataType: "video" },
       { id: "timestamp", label: "timestamp", dataType: "text" },
     ],
     outputs: [{ id: "output", label: "output", dataType: "image" }],

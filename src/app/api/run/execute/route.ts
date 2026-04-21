@@ -217,16 +217,28 @@ async function executeNode(
       }
 
       case "extract": {
-        const videoUrl = resolveInput(node.id, "video_url", allEdges, resolvedOutputs)
-          ?? (node.data as any).uploadedUrl 
-          ?? (node.data as any).url 
-          ?? "";
+        // 1. Try to resolve via Edges (the standard way)
+        let videoUrl = resolveInput(node.id, "videoUrl", allEdges, resolvedOutputs);
+        
+        // 2. If it's empty, find the node connected to this one manually
+        if (!videoUrl) {
+          const incomingEdge = allEdges.find(e => e.target === node.id);
+          if (incomingEdge) {
+            videoUrl = resolvedOutputs[incomingEdge.source];
+          }
+        }
+
+        // 3. If it's STILL empty, check if the user uploaded it directly to this node
+        if (!videoUrl) {
+          videoUrl = (node.data as any).uploadedUrl || (node.data as any).output || "";
+        }
 
         const timestamp = resolveInput(node.id, "timestamp", allEdges, resolvedOutputs)
           ?? (node.data as any).timestamp 
           ?? "50%";
 
-        console.log(`[FLOW_DEBUG] Extracting from: ${videoUrl || "EMPTY_URL"}`);
+        // LOG THIS: You will see this in your Vercel logs
+        console.log(`[DATA_FLOW] Node: ${node.id} | VideoURL: ${videoUrl || "FAILED_TO_RESOLVE"}`);
 
         const handle = await extractFrameTask.trigger({
           videoUrl,
@@ -235,7 +247,6 @@ async function executeNode(
           transloaditKey: process.env.NEXT_PUBLIC_TRANSLOADIT_KEY!,
           transloaditSecret: process.env.TRANSLOADIT_SECRET!,
         });
-
         const taskResult = await runs.poll(handle.id, { pollIntervalMs: 1000 });
         if (taskResult.status !== "COMPLETED") throw new Error("Extract task failed");
         
