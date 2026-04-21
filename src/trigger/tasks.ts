@@ -74,57 +74,46 @@ export const cropImageTask = task({
   }) => {
     logger.info("Crop image task started", { nodeRunId: payload.nodeRunId });
 
-    // Fetch image to get dimensions
+    // 1. Fetch image
     const imgResp = await fetch(payload.imageUrl);
     if (!imgResp.ok) throw new Error("Failed to fetch source image");
+    const imageBytes = await imgResp.arrayBuffer();
 
-    // Build Transloadit assembly for FFmpeg crop
-    const assemblyInstructions = {
+    // 2. Build Instructions
+    // Note: /image/resize uses x1, y1, x2, y2 for 'crop' strategy
+    const params = {
+      auth: { key: payload.transloaditKey },
       steps: {
-        ":original": { robot: "/upload/handle" },
         cropped: {
-          use: ":original",
           robot: "/image/resize",
+          use: ":original",
+          result: true,
+          resize_strategy: "crop",
+          // Transloadit expects decimals 0.0 - 1.0 for percentages
           crop_x1: payload.xPercent / 100,
           crop_y1: payload.yPercent / 100,
           crop_x2: (payload.xPercent + payload.widthPercent) / 100,
           crop_y2: (payload.yPercent + payload.heightPercent) / 100,
-          result: true,
-        },
-        exported: {
-          use: "cropped",
-          robot: "/s3/store",
-          // In production: configure your S3 bucket or Transloadit CDN
-          result: true,
-        },
-      },
+        }
+      }
     };
 
-    // Call Transloadit API
     const formData = new FormData();
-    formData.append(
-      "params",
-      JSON.stringify({
-        auth: { key: payload.transloaditKey },
-        template_id: process.env.TRANSLOADIT_CROP_TEMPLATE_ID,
-        steps: assemblyInstructions.steps,
-      })
-    );
-
-    // Pipe source image bytes
-    const imageBytes = await imgResp.arrayBuffer();
+    formData.append("params", JSON.stringify(params));
     formData.append("file", new Blob([imageBytes]), "source.jpg");
 
+    // 3. Call API - Removed template_id to avoid conflicts
     const assemblyResp = await fetch("https://api2.transloadit.com/assemblies", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${payload.transloaditKey}:${payload.transloaditSecret}`,
-      },
       body: formData,
+      // Note: Transloadit usually takes auth inside the 'params' JSON, 
+      // specific Bearer headers can sometimes cause 400s if not formatted perfectly.
     });
 
     if (!assemblyResp.ok) {
-      throw new Error(`Transloadit error: ${assemblyResp.status}`);
+      const errorDetail = await assemblyResp.text();
+      logger.error("Transloadit Rejection", { detail: errorDetail });
+      throw new Error(`Transloadit error: ${assemblyResp.status} - ${errorDetail}`);
     }
 
     const assembly = await assemblyResp.json();
