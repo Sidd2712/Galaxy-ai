@@ -162,6 +162,7 @@ async function executeNode(
 
       case "image": {
         output = (node.data as any).uploadedUrl ?? (node.data as any).output ?? "";
+        console.log(`[EXECUTE] Video node ${node.id} finished with URL: ${output}`);
         break;
       }
 
