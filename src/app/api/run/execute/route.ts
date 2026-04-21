@@ -217,18 +217,16 @@ async function executeNode(
       }
 
       case "extract": {
-        // 1. Try to resolve via Edges (the standard way)
-        let videoUrl = resolveInput(node.id, "videoUrl", allEdges, resolvedOutputs);
-        
-        // 2. If it's empty, find the node connected to this one manually
+        let videoUrl = resolveInput(node.id, "video_url", allEdges, resolvedOutputs);
         if (!videoUrl) {
-          const incomingEdge = allEdges.find(e => e.target === node.id);
-          if (incomingEdge) {
-            videoUrl = resolvedOutputs[incomingEdge.source];
+          const backupEdge = allEdges.find(e => e.target === node.id);
+          if (backupEdge) {
+            videoUrl = resolvedOutputs[backupEdge.source];
+            console.log(`[RECOVERY] Found videoUrl from source node: ${backupEdge.source}`);
           }
         }
 
-        // 3. If it's STILL empty, check if the user uploaded it directly to this node
+        // 3. LAST RESORT: Check if there's a hardcoded URL in the node itself
         if (!videoUrl) {
           videoUrl = (node.data as any).uploadedUrl || (node.data as any).output || "";
         }
@@ -237,9 +235,7 @@ async function executeNode(
           ?? (node.data as any).timestamp 
           ?? "50%";
 
-        // LOG THIS: You will see this in your Vercel logs
-        console.log(`[DATA_FLOW] Node: ${node.id} | VideoURL: ${videoUrl || "FAILED_TO_RESOLVE"}`);
-
+        // Trigger the task
         const handle = await extractFrameTask.trigger({
           videoUrl,
           timestamp,

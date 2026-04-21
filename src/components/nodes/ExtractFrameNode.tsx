@@ -8,7 +8,7 @@ import { useWorkflowStore } from "@/store/workflow-store";
 import type { ExtractFrameNodeData } from "@/types";
 
 const INPUT_HANDLES = [
-  { id: "videoUrl", label: "videoUrl", color: "#4da6ff" },
+  { id: "video_url", label: "video_url", color: "#4da6ff" },
   { id: "timestamp", label: "timestamp", color: "#7c6af7" },
 ];
 

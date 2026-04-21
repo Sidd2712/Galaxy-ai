@@ -160,14 +160,8 @@ export const extractFrameTask = task({
     transloaditKey: string;
     transloaditSecret: string;
   }) => {
-    logger.info("Extract frame payload check", { 
-      videoUrl: payload.videoUrl, 
-      nodeRunId: payload.nodeRunId 
-    });
+    logger.info("Extract frame task started", { nodeRunId: payload.nodeRunId });
 
-    if (!payload.videoUrl || payload.videoUrl.trim() === "") {
-      throw new Error(`CRITICAL: videoUrl is empty! Check the output of your 'Upload' node.`);
-    }
     // Parse timestamp
     let ffmpegTimestamp: string;
     if (payload.timestamp.endsWith("%")) {

@@ -134,7 +134,7 @@ export function buildSampleWorkflow(): { nodes: FlowNode[]; edges: FlowEdge[] } 
     {
       id: "e-vid-extract",
       source: "sample-vid", sourceHandle: "output",
-      target: "sample-extract", targetHandle: "videoUrl",
+      target: "sample-extract", targetHandle: "video_url",
       animated: true, className: "animated-edge",
       style: { stroke: "#4da6ff" },
     },
