@@ -30,8 +30,8 @@ A pixel-perfect, production-grade LLM workflow builder inspired by Krea.ai. Buil
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/nextflow.git
-cd nextflow
+git clone https://github.com/Sidd2712/Galaxy-ai.git
+cd Galaxy-ai
 npm install
 ```
 
@@ -50,7 +50,6 @@ Fill in the following in `.env.local`:
 | `DATABASE_URL` | [neon.tech](https://neon.tech) → Create project |
 | `GEMINI_API_KEY` | [aistudio.google.com](https://aistudio.google.com/app/apikey) |
 | `TRIGGER_SECRET_KEY` | [trigger.dev](https://trigger.dev) → Project Settings |
-| `NEXT_PUBLIC_TRIGGER_PUBLIC_API_KEY` | Same Trigger.dev dashboard |
 | `NEXT_PUBLIC_TRANSLOADIT_KEY` | [transloadit.com](https://transloadit.com) → Account |
 | `TRANSLOADIT_SECRET` | Same Transloadit dashboard |
 | `NEXT_PUBLIC_TRANSLOADIT_IMAGE_TEMPLATE_ID` | Create template in Transloadit |
@@ -174,7 +173,6 @@ vercel secret add clerk_secret_key "sk_live_..."
 vercel secret add database_url "postgresql://..."
 vercel secret add gemini_api_key "AIza..."
 vercel secret add trigger_secret_key "tr_prod_..."
-vercel secret add trigger_public_api_key "pk_prod_..."
 vercel secret add transloadit_key "..."
 vercel secret add transloadit_secret "..."
 vercel secret add transloadit_image_template_id "..."
@@ -224,11 +222,4 @@ Both branches run **in parallel** (Phases 1–3), then the convergence node wait
 
 ---
 
-## 📄 License
 
-MIT
-# Galaxy-ai
-# Galaxy-ai
-# Galaxy-ai
-# Galaxy-ai
-# Galaxy-ai
