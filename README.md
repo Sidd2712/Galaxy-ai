@@ -3,6 +3,9 @@
 A pixel-perfect, production-grade LLM workflow builder inspired by Krea.ai. Build, connect, and execute visual AI pipelines with Google Gemini, real file uploads via Transloadit, and background task execution via Trigger.dev.
 
 ---
+## 📺 Demo
+
+[![NextFlow Demo](https://img.shields.io/badge/🎥_Watch-Demo_Video-4da6ff?style=for-the-badge&logo=youtube)](YOUR_VIDEO_LINK_HERE)
 
 ## ✨ Features
 
