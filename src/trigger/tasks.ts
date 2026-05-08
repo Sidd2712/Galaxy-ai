@@ -72,6 +72,8 @@ export const cropImageTask = task({
     if (!imgResp.ok) throw new Error("Failed to fetch source image");
     const imageBytes = await imgResp.arrayBuffer();
 
+    // FIXED PARAMS: Using Transloadit Dynamic Assembly Variables
+    // This forces Transloadit to calculate the exact pixels based on the uploaded image's metadata
     const params = {
       auth: { key: payload.transloaditKey },
       steps: {
@@ -79,12 +81,12 @@ export const cropImageTask = task({
           robot: "/image/resize",
           use: ":original",
           result: true,
-          resize_strategy: "crop",
-          // Correct math: x2 = x1 + width
-          crop_x1: payload.xPercent / 100,
-          crop_y1: payload.yPercent / 100,
-          crop_x2: (payload.xPercent + payload.widthPercent) / 100,
-          crop_y2: (payload.yPercent + payload.heightPercent) / 100,
+          crop: {
+            x1: `\${Math.round(file.meta.width * ${payload.xPercent / 100})}`,
+            y1: `\${Math.round(file.meta.height * ${payload.yPercent / 100})}`,
+            x2: `\${Math.round(file.meta.width * ${(payload.xPercent + payload.widthPercent) / 100})}`,
+            y2: `\${Math.round(file.meta.height * ${(payload.yPercent + payload.heightPercent) / 100})}`
+          }
         }
       }
     };
