@@ -64,17 +64,17 @@ export const VideoNode = memo(function VideoNode({ id, data, selected }: NodePro
       title="Upload Video" accentColor="#4da6ff" selected={selected}>
 
       {data.uploadedUrl ? (
-        <div>
+        <div className="space-y-2">
+          <div className="relative aspect-video bg-black rounded-md overflow-hidden border border-border">
+            <video 
+              src={data.uploadedUrl} 
+              controls 
+              className="w-full h-full object-contain"
+            />
+          </div>
           <div className="bg-bg-3 border border-border rounded-md p-2">
-            <p className="font-mono text-[10px] text-success mb-0.5">✓ Uploaded via Transloadit</p>
             <p className="font-mono text-[9px] text-text-3 truncate">{data.uploadedUrl}</p>
           </div>
-          <button
-            onClick={() => { updateNodeData(id, { uploadedUrl: undefined, output: undefined }); setNodeStatus(id, "idle"); }}
-            className="font-mono text-[9px] text-text-3 hover:text-danger mt-1"
-          >
-            Remove
-          </button>
         </div>
       ) : (
         <div

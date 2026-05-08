@@ -1,7 +1,5 @@
-// src/trigger/tasks.ts
 import { task, logger } from "@trigger.dev/sdk/v3";
 import { GoogleGenerativeAI, type Part } from "@google/generative-ai";
-import { z } from "zod";
 
 // ─── LLM Task (Google Gemini) ─────────────────────────────────────
 export const llmTask = task({
@@ -17,15 +15,9 @@ export const llmTask = task({
     logger.info("LLM task started", { model: payload.model, nodeRunId: payload.nodeRunId });
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-    const model = genAI.getGenerativeModel({ model: payload.model });
-
+    
     // Build content parts
     const parts: Part[] = [];
-
-    // Add system prompt if provided
-    const systemInstruction = payload.systemPrompt?.trim()
-      ? payload.systemPrompt
-      : undefined;
 
     // Add image parts if provided
     if (payload.imageUrls?.length) {
@@ -45,6 +37,8 @@ export const llmTask = task({
     // Add user message
     parts.push({ text: payload.userMessage });
 
+    const systemInstruction = payload.systemPrompt?.trim() ? payload.systemPrompt : undefined;
+
     const modelInstance = genAI.getGenerativeModel({
       model: payload.model,
       ...(systemInstruction ? { systemInstruction } : {}),
@@ -58,7 +52,7 @@ export const llmTask = task({
   },
 });
 
-// ─── Crop Image Task (FFmpeg via sharp as fallback) ───────────────
+// ─── Crop Image Task ──────────────────────────────────────────────
 export const cropImageTask = task({
   id: "crop-image",
   maxDuration: 60,
@@ -74,13 +68,10 @@ export const cropImageTask = task({
   }) => {
     logger.info("Crop image task started", { nodeRunId: payload.nodeRunId });
 
-    // 1. Fetch image
     const imgResp = await fetch(payload.imageUrl);
     if (!imgResp.ok) throw new Error("Failed to fetch source image");
     const imageBytes = await imgResp.arrayBuffer();
 
-    // 2. Build Instructions
-    // Note: /image/resize uses x1, y1, x2, y2 for 'crop' strategy
     const params = {
       auth: { key: payload.transloaditKey },
       steps: {
@@ -89,7 +80,7 @@ export const cropImageTask = task({
           use: ":original",
           result: true,
           resize_strategy: "crop",
-          // Transloadit expects decimals 0.0 - 1.0 for percentages
+          // Correct math: x2 = x1 + width
           crop_x1: payload.xPercent / 100,
           crop_y1: payload.yPercent / 100,
           crop_x2: (payload.xPercent + payload.widthPercent) / 100,
@@ -102,75 +93,57 @@ export const cropImageTask = task({
     formData.append("params", JSON.stringify(params));
     formData.append("file", new Blob([imageBytes]), "source.jpg");
 
-    // 3. Call API - Removed template_id to avoid conflicts
     const assemblyResp = await fetch("https://api2.transloadit.com/assemblies", {
       method: "POST",
       body: formData,
-      // Note: Transloadit usually takes auth inside the 'params' JSON, 
-      // specific Bearer headers can sometimes cause 400s if not formatted perfectly.
     });
 
     if (!assemblyResp.ok) {
       const errorDetail = await assemblyResp.text();
-      logger.error("Transloadit Rejection", { detail: errorDetail });
-      throw new Error(`Transloadit error: ${assemblyResp.status} - ${errorDetail}`);
+      throw new Error(`Transloadit Start Error: ${assemblyResp.status} - ${errorDetail}`);
     }
 
-    const assembly = await assemblyResp.json();
-
-    // Poll for completion
-    let finalAssembly = assembly;
+    let finalAssembly = await assemblyResp.json();
     let attempts = 0;
+
     while (
       finalAssembly.ok !== "ASSEMBLY_COMPLETED" &&
       finalAssembly.ok !== "ASSEMBLY_FAILED" &&
       attempts < 30
     ) {
       await new Promise((r) => setTimeout(r, 2000));
-      const poll = await fetch(`https://api2.transloadit.com/assemblies/${assembly.assembly_id}`, {
-        headers: { Authorization: `Bearer ${payload.transloaditKey}` },
-      });
+      const poll = await fetch(finalAssembly.assembly_ssl_url);
       finalAssembly = await poll.json();
       attempts++;
     }
 
     if (finalAssembly.ok !== "ASSEMBLY_COMPLETED") {
-      throw new Error("Transloadit assembly failed or timed out");
+      throw new Error(`Crop Failed: ${finalAssembly.message || "Unknown error"}`);
     }
 
-    const outputUrl =
-      finalAssembly.results?.exported?.[0]?.ssl_url ??
-      finalAssembly.results?.cropped?.[0]?.ssl_url;
-
+    const outputUrl = finalAssembly.results?.cropped?.[0]?.ssl_url;
     if (!outputUrl) throw new Error("No output URL from Transloadit");
 
-    logger.info("Crop image completed", { outputUrl });
     return { output: outputUrl };
   },
 });
 
-// ─── Extract Frame Task (FFmpeg) ──────────────────────────────────
+// ─── Extract Frame Task ──────────────────────────────────────────
 export const extractFrameTask = task({
   id: "extract-frame",
   maxDuration: 90,
   run: async (payload: {
     videoUrl: string;
-    timestamp: string; // "50%" or "10" (seconds)
+    timestamp: string;
     nodeRunId: string;
     transloaditKey: string;
     transloaditSecret: string;
   }) => {
     logger.info("Extract frame task started", { nodeRunId: payload.nodeRunId });
 
-    // Parse timestamp
-    let ffmpegTimestamp: string;
-    if (payload.timestamp.endsWith("%")) {
-      // Percentage: we need video duration first, but Transloadit handles this
-      ffmpegTimestamp = payload.timestamp;
-    } else {
-      const secs = parseFloat(payload.timestamp);
-      ffmpegTimestamp = isNaN(secs) ? "00:00:05" : formatTimestamp(secs);
-    }
+    const videoResp = await fetch(payload.videoUrl);
+    if (!videoResp.ok) throw new Error("Failed to fetch source video");
+    const videoBytes = await videoResp.arrayBuffer();
 
     const formData = new FormData();
     formData.append(
@@ -178,25 +151,20 @@ export const extractFrameTask = task({
       JSON.stringify({
         auth: { key: payload.transloaditKey },
         steps: {
-          ":original": { robot: "/upload/handle" },
           frame: {
-            use: ":original",
             robot: "/video/thumbs",
+            use: ":original",
             count: 1,
+            // Handle percentage or seconds
             offsets: payload.timestamp.endsWith("%")
-              ? [parseInt(payload.timestamp)]
-              : undefined,
+              ? [payload.timestamp]
+              : [formatTimestamp(parseFloat(payload.timestamp))],
             ffmpeg_stack: "v6.0.0",
             result: true,
           },
         },
       })
     );
-
-    // Fetch video bytes and append
-    const videoResp = await fetch(payload.videoUrl);
-    if (!videoResp.ok) throw new Error("Failed to fetch source video");
-    const videoBytes = await videoResp.arrayBuffer();
     formData.append("file", new Blob([videoBytes]), "source.mp4");
 
     const assemblyResp = await fetch("https://api2.transloadit.com/assemblies", {
@@ -204,37 +172,32 @@ export const extractFrameTask = task({
       body: formData,
     });
 
-    if (!assemblyResp.ok) throw new Error(`Transloadit error: ${assemblyResp.status}`);
+    if (!assemblyResp.ok) {
+      const errorDetail = await assemblyResp.text();
+      throw new Error(`Transloadit Video Error: ${assemblyResp.status} - ${errorDetail}`);
+    }
 
-    const assembly = await assemblyResp.json();
-
-    // Poll
-    let finalAssembly = assembly;
+    let finalAssembly = await assemblyResp.json();
     let attempts = 0;
+
     while (
       finalAssembly.ok !== "ASSEMBLY_COMPLETED" &&
       finalAssembly.ok !== "ASSEMBLY_FAILED" &&
       attempts < 30
     ) {
       await new Promise((r) => setTimeout(r, 2000));
-      const poll = await fetch(
-        `https://api2.transloadit.com/assemblies/${assembly.assembly_id}`,
-        {
-          headers: { Authorization: `Bearer ${payload.transloaditKey}` },
-        }
-      );
+      const poll = await fetch(finalAssembly.assembly_ssl_url);
       finalAssembly = await poll.json();
       attempts++;
     }
 
     if (finalAssembly.ok !== "ASSEMBLY_COMPLETED") {
-      throw new Error("Frame extraction failed");
+      throw new Error(`Frame Extraction Failed: ${finalAssembly.message || "Unknown error"}`);
     }
 
     const outputUrl = finalAssembly.results?.frame?.[0]?.ssl_url;
     if (!outputUrl) throw new Error("No frame URL from Transloadit");
 
-    logger.info("Extract frame completed", { outputUrl });
     return { output: outputUrl };
   },
 });

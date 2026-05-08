@@ -2,10 +2,12 @@
 // src/components/workflow/WorkflowHeader.tsx
 import { UserButton } from "@clerk/nextjs";
 import { useWorkflowStore } from "@/store/workflow-store";
+import { useRouter } from "next/navigation"; // Added for dashboard navigation
 import {
   LayoutGrid, History, Undo2, Redo2, Play, PlayCircle,
-  Download, Upload, Save, Loader2
+  Download, Upload, Save, Loader2, Sun, Moon, Home
 } from "lucide-react";
+import { useEffect, useState } from "react";
 
 interface Props {
   onRunAll: () => void;
@@ -22,7 +24,23 @@ export function WorkflowHeader({
   onRunAll, onRunSelected, onUndo, onRedo,
   onToggleSidebar, onToggleHistory, isRunning, hasSelection
 }: Props) {
+  const router = useRouter();
   const { workflowName, setWorkflowName, isSaving, saveWorkflow } = useWorkflowStore();
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+
+  // Step 1: Theme Toggle Logic
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (theme === "dark") {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+  };
 
   const exportWorkflow = () => {
     const { nodes, edges } = useWorkflowStore.getState();
@@ -59,6 +77,13 @@ export function WorkflowHeader({
 
       <div className="w-px h-5 bg-border" />
 
+      {/* Step 2: Dashboard/Home Button */}
+      <HeaderBtn onClick={() => router.push("/dashboard")} title="Back to Dashboard">
+        <Home size={14} />
+      </HeaderBtn>
+
+      <div className="w-px h-5 bg-border" />
+
       {/* Sidebar toggles */}
       <HeaderBtn onClick={onToggleSidebar} title="Toggle Sidebar">
         <LayoutGrid size={14} />
@@ -84,6 +109,13 @@ export function WorkflowHeader({
       />
 
       <div className="flex-1" />
+
+      {/* Step 3: Dark/Light Mode Toggle Button */}
+      <HeaderBtn onClick={toggleTheme} title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}>
+        {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+      </HeaderBtn>
+
+      <div className="w-px h-5 bg-border" />
 
       {/* Export / Import */}
       <HeaderBtn onClick={exportWorkflow} title="Export JSON"><Download size={14} /></HeaderBtn>

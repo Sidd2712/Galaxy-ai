@@ -108,24 +108,27 @@ async function executeWorkflow(
   let queue = nodeIds.filter((id) => inDegree[id] === 0);
 
   while (queue.length > 0) {
-    // Execute all nodes in this level in parallel
+    // 1. Fire all available nodes in parallel
     const levelResults = await Promise.all(
       queue.map((nodeId) => executeNode(runId, nodeMap[nodeId], allEdges, outputs))
     );
 
-    // Store outputs and update allResults
     levelResults.forEach(({ nodeId, status, output }) => {
       if (output) outputs[nodeId] = output;
       allResults.push({ nodeId, status, output });
 
-      // Decrement in-degree of children
-      (children[nodeId] || []).forEach((child) => {
-        inDegree[child]--;
+      // 2. Decrement in-degree for all children
+      (children[nodeId] || []).forEach((childId) => {
+        inDegree[childId]--;
       });
     });
 
-    // Next queue = nodes whose in-degree just hit 0
-    queue = nodeIds.filter((id) => inDegree[id] === 0 && !outputs[id] && !allResults.find(r => r.nodeId === id));
+    // 3. Find NEXT nodes that are now ready (in-degree is 0)
+    // and haven't been processed yet.
+    queue = nodeIds.filter((id) => 
+      inDegree[id] === 0 && 
+      !allResults.find(r => r.nodeId === id)
+    );
   }
 
   return allResults;
@@ -266,18 +269,20 @@ async function executeNode(
 
     return { nodeId: node.id, status: "SUCCESS", output };
   } catch (err: any) {
+    const errorMsg = err?.message ?? "Unknown error";
     const finishedAt = new Date();
     await db.nodeRun.update({
       where: { id: nodeRun.id },
       data: {
         status: "FAILED",
-        errorMsg: err?.message ?? "Unknown error",
+        errorMsg: errorMsg,
         finishedAt,
         durationMs: finishedAt.getTime() - startedAt.getTime(),
       },
     });
-    return { nodeId: node.id, status: "FAILED" };
-  }
+    // Return the errorMsg so the frontend can display it!
+    return { nodeId: node.id, status: "FAILED", output: errorMsg }; 
+}
 }
 
 // ─── Resolve input handle value from connected upstream node ──────
